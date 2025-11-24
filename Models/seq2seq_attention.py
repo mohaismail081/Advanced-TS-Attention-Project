@@ -4,7 +4,7 @@ from tensorflow.keras.layers import Input, LSTM, Dense, Concatenate, Attention, 
 
 def create_attention_model(T_in, T_out, F, n_units):
     """
-    Defines the Sequence-to-Sequence model with Attention.
+    Defines the Sequence-to-Sequence model with Attention, modified to output attention weights.
     """
     
     # --- 1. Define Encoder ---
@@ -35,17 +35,29 @@ def create_attention_model(T_in, T_out, F, n_units):
         initial_state=encoder_states
     )
 
-    # --- 3. Attention Mechanism ---
-    attention_output = Attention(name='attention_layer')([decoder_outputs, encoder_outputs])
+    # --- 3. Attention Mechanism (CRITICAL MODIFICATION HERE) ---
+    # The Attention layer can now be configured to return the weights themselves.
+    # The output of the Attention layer is now a list: [attention_context_vector, attention_weights]
+    attention_output, attention_weights = Attention(
+        name='attention_layer'
+        # Setting use_scale=False for compatibility with older Keras versions
+    )([decoder_outputs, encoder_outputs], return_attention_scores=True)
     
     # Concatenate the attention context vector with the decoder outputs
+    # The context vector is the first item in the attention_output list
     concat = Concatenate(axis=-1, name='concat_attention_and_decoder')([decoder_outputs, attention_output])
 
     # --- 4. Output Layer ---
     decoder_dense = Dense(1) 
-    output = TimeDistributed(decoder_dense, name='time_distributed_output')(concat) 
+    # Rename for clarity when defining losses later
+    output = TimeDistributed(decoder_dense, name='prediction_output')(concat) 
 
-    # --- 5. Final Model ---
-    model = Model(inputs=[encoder_inputs, decoder_inputs], outputs=output, name='Seq2Seq_Attention_Model')
+    # --- 5. Final Model (CRITICAL MODIFICATION HERE) ---
+    # The model now outputs two items: the prediction and the attention weights
+    model = Model(
+        inputs=[encoder_inputs, decoder_inputs], 
+        outputs=[output, attention_weights], 
+        name='Seq2Seq_Attention_Visualization_Model'
+    )
     
     return model
